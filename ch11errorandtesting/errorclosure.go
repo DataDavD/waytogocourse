@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-type fType1 func(a, b int)
+type fType1 func(int, int)
 
 func errorHandler(fn fType1) fType1 {
 	return func(a, b int) {
