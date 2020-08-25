@@ -19,7 +19,7 @@ func errorHandler(fn fType1) fType1 {
 }
 
 func main() {
-	var try fType1 = func(a, b int) {
+	try := func(a, b int) {
 		if b == 1 {
 			panic(errors.New("this is an error"))
 		} else {
