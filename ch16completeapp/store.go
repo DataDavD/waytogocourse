@@ -3,7 +3,7 @@ package main
 import "sync"
 
 type URLStore struct {
-	urls map[string]string // map from short to long URLs
+	urls map[string]string
 	mu   sync.RWMutex
 }
 
@@ -35,11 +35,11 @@ func (s *URLStore) Count() int {
 
 func (s *URLStore) Put(url string) string {
 	for {
-		key := genKey(s.Count()) // TODO: genKey to be added
-		if s.Set(key, url) {
+		key := genKey(s.Count()) // generate the short URL
+		if ok := s.Set(key, url); ok {
 			return key
 		}
 	}
-	// shouldn't get to here
+	// shouldn't get here
 	return ""
 }
