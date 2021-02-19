@@ -11,9 +11,10 @@ const addForm = `
 URL: <input type="text" name="url">
 <input type="submit" value="Add">
 </form>
-<\html><\body>`
+</html></body>
+`
 
-var store = NewURLStore()
+var store = NewURLStore("store.gob")
 
 func main() {
 	http.HandleFunc("/", Redirect)
