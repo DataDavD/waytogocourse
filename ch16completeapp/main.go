@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 )
@@ -14,12 +15,20 @@ URL: <input type="text" name="url">
 </html></body>
 `
 
-var store = NewURLStore("store.gob")
+var (
+	listenAddr = flag.String("http", ":8080", "http listen address")
+	dataFile   = flag.String("file", "store.gob", "data store file name")
+	hostname   = flag.String("host", "localhost:8080", "http host name")
+)
+
+var store *URLStore
 
 func main() {
+	flag.Parse()
+	store = NewURLStore(*dataFile)
 	http.HandleFunc("/", Redirect)
 	http.HandleFunc("/add", Add)
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(*hostname, nil)
 }
 
 func Redirect(w http.ResponseWriter, r *http.Request) {
