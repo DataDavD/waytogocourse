@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"os"
@@ -51,20 +52,24 @@ func (s *URLStore) saveLoop(filename string) {
 	}
 }
 
-func (s *URLStore) Get(key string) string {
+func (s *URLStore) Get(key, url *string) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.urls[key]
+	if u, ok := s.urls[*key]; ok {
+		*url = u
+		return nil
+	}
+	return errors.New("key not found")
 }
 
-func (s *URLStore) Set(key, url string) bool {
+func (s *URLStore) Set(key, url *string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, present := s.urls[key]; present {
-		return false
+	if _, present := s.urls[*key]; present {
+		return errors.New("key already exists")
 	}
-	s.urls[key] = url
-	return true
+	s.urls[*key] = *url
+	return nil
 }
 
 func (s *URLStore) Count() int {
@@ -73,15 +78,17 @@ func (s *URLStore) Count() int {
 	return len(s.urls)
 }
 
-func (s *URLStore) Put(url string) string {
+func (s *URLStore) Put(url, key *string) error {
 	for {
-		key := genKey(s.Count()) // generate the short URL
-		if s.Set(key, url) {
-			s.save <- record{key, url}
-			return key
+		*key = genKey(s.Count()) // generate the short URL
+		if err := s.Set(key, url); err == nil {
+			errors.New("error saving URL to map")
 		}
 	}
-	panic("shouldn't be here in URLStore Put method")
+	if s.save != nil {
+		s.save <- record{*key, *url}
+	}
+	return nil
 }
 
 func (s *URLStore) load(filename string) error {
@@ -100,7 +107,7 @@ func (s *URLStore) load(filename string) error {
 	for err != io.EOF {
 		var r record
 		if err = d.Decode(&r); err == nil {
-			s.Set(r.Key, r.URL)
+			s.Set(&r.Key, &r.URL)
 		}
 	}
 	if err == io.EOF {

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/rpc"
 )
 
 const addForm = `
@@ -19,6 +20,7 @@ var (
 	listenAddr = flag.String("http", ":8080", "http listen address")
 	dataFile   = flag.String("file", "store.json", "data store file name")
 	hostname   = flag.String("host", "localhost:8080", "http host name")
+	rpcEnabled = flag.Bool("rpc", false, "enable RPC server")
 )
 
 var store *URLStore
@@ -26,6 +28,10 @@ var store *URLStore
 func main() {
 	flag.Parse()
 	store = NewURLStore(*dataFile)
+	if *rpcEnabled {
+		rpc.RegisterName("Store", store)
+		rpc.HandleHTTP()
+	}
 	http.HandleFunc("/", Redirect)
 	http.HandleFunc("/add", Add)
 	http.ListenAndServe(*hostname, nil)
@@ -33,9 +39,13 @@ func main() {
 
 func Redirect(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Path[1:]
-	url := store.Get(key)
-	if url == "" {
+	if key == "" {
 		http.NotFound(w, r)
+		return
+	}
+	var url string
+	if err := store.Get(&key, &url); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	http.Redirect(w, r, url, http.StatusFound)
@@ -47,8 +57,12 @@ func Add(w http.ResponseWriter, r *http.Request) {
 	url := r.FormValue("url")
 	if url == "" {
 		fmt.Fprint(w, addForm)
+		return
 	}
-	key := store.Put(url)
-
+	var key string
+	if err := store.Put(&url, &key); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	fmt.Fprintf(w, "%s", key)
 }
