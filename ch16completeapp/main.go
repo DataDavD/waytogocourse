@@ -20,14 +20,19 @@ var (
 	listenAddr = flag.String("http", ":8080", "http listen address")
 	dataFile   = flag.String("file", "store.json", "data store file name")
 	hostname   = flag.String("host", "localhost:8080", "http host name")
+	masterAddr = flag.String("master", "", "RPC master address")
 	rpcEnabled = flag.Bool("rpc", false, "enable RPC server")
 )
 
-var store *URLStore
+var store Store
 
 func main() {
 	flag.Parse()
-	store = NewURLStore(*dataFile)
+	if *masterAddr != "" {
+		store = NewProxyStore(*masterAddr)
+	} else {
+		store = NewURLStore(*dataFile)
+	}
 	if *rpcEnabled {
 		rpc.RegisterName("Store", store)
 		rpc.HandleHTTP()
@@ -53,7 +58,6 @@ func Redirect(w http.ResponseWriter, r *http.Request) {
 
 func Add(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
-
 	url := r.FormValue("url")
 	if url == "" {
 		fmt.Fprint(w, addForm)

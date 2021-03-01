@@ -5,14 +5,25 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net/rpc"
 	"os"
 	"sync"
 )
 
 const saveQueueLength = 1000
 
+type Store interface {
+	Put(url, key *string) error
+	Get(key, url *string) error
+}
+
 type record struct {
 	Key, URL string
+}
+
+type ProxyStore struct {
+	urls   *URLStore
+	client *rpc.Client
 }
 
 type URLStore struct {
@@ -22,14 +33,14 @@ type URLStore struct {
 }
 
 func NewURLStore(filename string) *URLStore {
-	s := &URLStore{
-		urls: make(map[string]string),
-		save: make(chan record, saveQueueLength),
+	s := &URLStore{urls: make(map[string]string)}
+	if filename != "" {
+		s.save = make(chan record, saveQueueLength)
+		if err := s.load(filename); err != nil {
+			log.Println("Error loading data in URLStore:", err)
+		}
+		go s.saveLoop(filename)
 	}
-	if err := s.load(filename); err != nil {
-		log.Println("Error loading data in URLStore:", err)
-	}
-	go s.saveLoop(filename)
 	return s
 }
 
@@ -79,11 +90,9 @@ func (s *URLStore) Count() int {
 }
 
 func (s *URLStore) Put(url, key *string) error {
-	for {
-		*key = genKey(s.Count()) // generate the short URL
-		if err := s.Set(key, url); err == nil {
-			errors.New("error saving URL to map")
-		}
+	*key = genKey(s.Count()) // generate the short URL
+	if err := s.Set(key, url); err != nil {
+		return errors.New("error saving URL to map")
 	}
 	if s.save != nil {
 		s.save <- record{*key, *url}
@@ -115,4 +124,33 @@ func (s *URLStore) load(filename string) error {
 	}
 	log.Println("Error decoding URLStore:", err) // map hasn't been read correctly
 	return err
+}
+
+func NewProxyStore(addr string) *ProxyStore {
+	client, err := rpc.DialHTTP("tcp", addr)
+	if err != nil {
+		log.Println("Error constructing ProxyStore", err)
+	}
+	return &ProxyStore{urls: NewURLStore(""), client: client}
+}
+
+func (s *ProxyStore) Get(key, url *string) error {
+	if err := s.urls.Get(key, url); err == nil {
+		return nil
+	}
+	// rpc call to master
+	if err := s.client.Call("Store.Get", key, url); err != nil {
+		return err
+	}
+	s.urls.Set(key, url) // update local cache
+	return nil
+}
+
+func (s *ProxyStore) Put(url, key *string) error {
+	// rpc call to master
+	if err := s.client.Call("Store.Put", url, key); err != nil {
+		return err
+	}
+	s.urls.Set(key, url) // update local cache
+	return nil
 }
